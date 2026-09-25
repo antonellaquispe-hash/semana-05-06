@@ -199,6 +199,21 @@ img {
   white-space: nowrap;
 }
 
+/* A skip link that never becomes visible is useless to keyboard users, so
+   reveal it as a floating pill while it holds focus. */
+.visually-hidden:focus,
+.visually-hidden:focus-visible {
+  position: fixed;
+  top: var(--space-sm);
+  left: var(--space-sm);
+  z-index: 10;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip-path: none;
+}
+
 /* --------------------------------------------------------------------------
    4. Layout primitives
    -------------------------------------------------------------------------- */
@@ -348,11 +363,6 @@ img {
   .card:hover .card__media img {
     transform: scale(1.045);
   }
-}
-
-.card:focus-within {
-  border-color: var(--accent-border);
-  box-shadow: var(--shadow-md), var(--focus-ring);
 }
 
 .card__media {
@@ -527,18 +537,6 @@ img {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
   box-shadow: var(--shadow-md);
-}
-
-.btn--ghost {
-  color: var(--accent);
-  background: var(--surface);
-  border-color: var(--border-strong);
-}
-
-.btn--ghost:hover {
-  color: var(--accent-hover);
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
 }
 
 /* --------------------------------------------------------------------------
