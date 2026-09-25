@@ -3,6 +3,16 @@ from django.contrib import admin
 from .models import Genre, Movie, Person, Rating
 
 
+class RatingInline(admin.TabularInline):
+    """Edit a movie's ratings from the movie change form."""
+
+    model = Rating
+    fields = ("score", "comment", "created_at")
+    # `created_at` is auto-generated, so it can only ever be displayed.
+    readonly_fields = ("created_at",)
+    extra = 2
+
+
 @admin.register(Movie)
 class MovieAdmin(admin.ModelAdmin):
     list_display = ("title", "release_year", "director", "created_at")
@@ -19,6 +29,7 @@ class MovieAdmin(admin.ModelAdmin):
     show_full_result_count = False
     filter_horizontal = ("genres",)
     autocomplete_fields = ("director",)
+    inlines = (RatingInline,)
 
 
 @admin.register(Genre)
