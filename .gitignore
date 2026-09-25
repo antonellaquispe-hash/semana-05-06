@@ -1,0 +1,25 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.sqlite3
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Collected static files
+staticfiles/
+
+# User-uploaded media files (keep the directory, ignore its contents)
+media/*
+!media/.gitkeep
+
+# Environment variables
+.env
+
+# Editor / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
