@@ -1,21 +1,21 @@
 {% load static %}<!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Movie catalogue{% endblock %}</title>
-  <meta name="description" content="{% block description %}Public movie catalogue and recommendations.{% endblock %}">
+  <title>{% block title %}Catálogo de películas{% endblock %}</title>
+  <meta name="description" content="{% block description %}Catálogo público de películas y recomendaciones.{% endblock %}">
   <link rel="stylesheet" href="{% static 'css/movies.css' %}">
 </head>
 <body>
-  <a class="visually-hidden btn btn--primary" href="#main">Skip to content</a>
+  <a class="visually-hidden btn btn--primary" href="#main">Ir al contenido</a>
 
   <header class="masthead">
     <div class="container">
-      <p class="masthead__eyebrow">Public catalogue</p>
-      <h1 class="masthead__title">{% block heading %}Movie recommendations{% endblock %}</h1>
+      <p class="masthead__eyebrow">Catálogo público</p>
+      <h1 class="masthead__title">{% block heading %}Recomendaciones de películas{% endblock %}</h1>
       <p class="masthead__subtitle">
-        {% block subtitle %}Top-rated titles, grouped by the genres they share.{% endblock %}
+        {% block subtitle %}Las películas mejor valoradas, agrupadas por los géneros que comparten.{% endblock %}
       </p>
     </div>
   </header>

@@ -1,4 +1,4 @@
-from django.contrib import admin
+﻿from django.contrib import admin
 
 from .models import Genre, Movie, Person, Rating
 
@@ -29,7 +29,7 @@ class MovieAdmin(AuditedModelAdmin):
     list_display = ("title", "release_year", "director", "created_at")
     list_filter = ("genres", "release_year")
     search_fields = ("title", "description")
-    search_help_text = "Type a title or any word from the description to search."
+    search_help_text = "Escribe un título o cualquier palabra de la descripción para buscar."
     # `director` is rendered on every row, so fetch it together with the movie
     # instead of issuing one extra query per row.
     list_select_related = ("director",)
@@ -47,7 +47,7 @@ class MovieAdmin(AuditedModelAdmin):
 class GenreAdmin(AuditedModelAdmin):
     list_display = ("name", "description", "created_at")
     search_fields = ("name", "description")
-    search_help_text = "Type a genre name or any word from its description."
+    search_help_text = "Escribe el nombre de un género o cualquier palabra de su descripción."
     ordering = ("name",)
     list_per_page = 50
 
@@ -56,7 +56,7 @@ class GenreAdmin(AuditedModelAdmin):
 class PersonAdmin(AuditedModelAdmin):
     list_display = ("name", "birth_date", "created_at")
     search_fields = ("name", "biography")
-    search_help_text = "Type a person name or any word from the biography."
+    search_help_text = "Escribe el nombre de una persona o cualquier palabra de la biografía."
     ordering = ("name",)
     list_per_page = 50
 
@@ -69,7 +69,9 @@ class RatingAdmin(AuditedModelAdmin):
     # `movie__icontains`, which a ForeignKey does not support. Traverse to the
     # related field instead, so searching matches the movie title.
     search_fields = ("movie__title", "comment")
-    search_help_text = "Type a movie title or any word from a comment."
+    search_help_text = (
+        "Escribe el título de una película o cualquier palabra de un comentario."
+    )
     list_select_related = ("movie",)
     date_hierarchy = "created_at"
     ordering = ("-created_at",)

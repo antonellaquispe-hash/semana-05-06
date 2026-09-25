@@ -1,23 +1,34 @@
 {% extends "movies/base.html" %}
+{% load i18n %}
 
-{% block title %}Movie recommendations{% endblock %}
+{% block title %}Recomendaciones de películas{% endblock %}
 
 {% block description %}
-Top-rated movies grouped by genre, based on the ratings recorded for each title.
+Las películas mejor valoradas, agrupadas por género, a partir de las valoraciones
+registradas para cada título.
 {% endblock %}
 
-{% block heading %}Movie recommendations{% endblock %}
+{% block heading %}Recomendaciones de películas{% endblock %}
 
 {% block subtitle %}
-Top-rated titles, grouped by the genres they share. Rankings use the average
-score of every rating recorded for a movie.
+Las películas mejor valoradas, agrupadas por los géneros que comparten. La
+clasificación se basa en la puntuación media de todas las valoraciones de cada
+película.
 {% endblock %}
 
 {% block content %}
   <p class="page-lead">
-    <span><strong>{{ movie_count }}</strong> movie{{ movie_count|pluralize }} in the catalogue</span>
+    {% blocktranslate count counter=movie_count %}
+      <strong>{{ counter }}</strong> película en el catálogo
+    {% plural %}
+      <strong>{{ counter }}</strong> películas en el catálogo
+    {% endblocktranslate %}
     <span aria-hidden="true">&middot;</span>
-    <span><strong>{{ recommendations|length }}</strong> genre{{ recommendations|length|pluralize }} represented</span>
+    {% blocktranslate count counter=recommendations|length %}
+      <strong>{{ counter }}</strong> representado
+    {% plural %}
+      <strong>{{ counter }}</strong> representados
+    {% endblocktranslate %}
   </p>
 
   {% if not recommendations %}
@@ -29,10 +40,10 @@ score of every rating recorded for a movie.
           <path d="M7.5 4v16M16.5 4v16M2.5 12h19M2.5 8h5M2.5 16h5M16.5 8h5M16.5 16h5"></path>
         </svg>
       </span>
-      <h2 class="empty-state__title">No movies to recommend yet</h2>
+      <h2 class="empty-state__title">Todavía no hay películas para recomendar</h2>
       <p class="empty-state__text">
-        The catalogue is empty. Once movies are recorded together with their genres
-        and ratings, the best rated titles will be listed here automatically.
+        El catálogo está vacío. En cuanto se registren películas con sus géneros y
+        valoraciones, las mejor valoradas aparecerán aquí automáticamente.
       </p>
     </div>
   {% else %}
@@ -53,7 +64,7 @@ score of every rating recorded for a movie.
               <article class="card">
                 <div class="card__media">
                   {% if movie.poster %}
-                    <img src="{{ movie.poster.url }}" alt="Poster for {{ movie.title }}"
+                    <img src="{{ movie.poster.url }}" alt="Cartel de {{ movie.title }}"
                          loading="lazy" decoding="async">
                   {% else %}
                     <span class="card__placeholder">
@@ -63,7 +74,7 @@ score of every rating recorded for a movie.
                         <path d="M3 15l4.5-4.5 4 4 3-3L21 17"></path>
                         <circle cx="15.5" cy="9" r="1.4"></circle>
                       </svg>
-                      No poster
+                      Sin cartel
                     </span>
                   {% endif %}
                 </div>
@@ -76,7 +87,7 @@ score of every rating recorded for a movie.
                     <span>{{ movie.duration }} min</span>
                   </p>
                   <p class="card__director">
-                    <span class="label">Directed by</span> {{ movie.director.name }}
+                    <span class="label">Dirigida por</span> {{ movie.director.name }}
                   </p>
                   <div class="card__tags">
                     {% for genre in movie.genres.all %}
@@ -90,11 +101,15 @@ score of every rating recorded for a movie.
                     <span class="badge">
                       {{ movie.average_score|floatformat:1 }}<span aria-hidden="true">/10</span>
                       <span class="badge__count">
-                        {{ movie.ratings_count }} rating{{ movie.ratings_count|pluralize }}
+                        {% blocktranslate count counter=movie.ratings_count %}
+                          {{ counter }} valoración
+                        {% plural %}
+                          {{ counter }} valoraciones
+                        {% endblocktranslate %}
                       </span>
                     </span>
                   {% else %}
-                    <span class="badge badge--muted">Not rated yet</span>
+                    <span class="badge badge--muted">Sin valorar</span>
                   {% endif %}
                 </div>
               </article>

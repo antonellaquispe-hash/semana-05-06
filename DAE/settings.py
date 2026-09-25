@@ -104,7 +104,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+# Spanish renders Django's own admin interface in Spanish, on top of the
+# translated labels defined on this project's models and templates.
+LANGUAGE_CODE = 'es'
 
 TIME_ZONE = 'UTC'
 
