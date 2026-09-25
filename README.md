@@ -47,6 +47,13 @@ Install the dependencies:
 pip install -r requirements.txt
 ```
 
+Optionally set a signing key (the project falls back to a development-only
+value so it runs out of the box):
+
+```bash
+DJANGO_SECRET_KEY=your-secret-key
+```
+
 Apply the migrations:
 
 ```bash
@@ -66,8 +73,9 @@ http://127.0.0.1:8000/admin/.
 
 - `ALLOWED_HOSTS` is limited to the local development hosts (`localhost`,
   `127.0.0.1`, `[::1]`) and must be extended before any deployment.
-- `SECRET_KEY` and `DEBUG` hold development values and must be replaced for
-  production.
+- `SECRET_KEY` is read from the `DJANGO_SECRET_KEY` environment variable. Without
+  it the project uses a development-only fallback, and `DEBUG` is enabled; both
+  must be replaced for production.
 - Static files are served by `runserver` while `DEBUG` is `True`; run
   `python manage.py collectstatic` to gather them into `STATIC_ROOT`.
 - User-uploaded media files are served by Django only while `DEBUG` is `True`.
