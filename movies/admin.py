@@ -3,6 +3,17 @@ from django.contrib import admin
 from .models import Genre, Movie, Person, Rating
 
 
+class AuditedModelAdmin(admin.ModelAdmin):
+    """Base admin exposing the audit timestamps as visible but read-only.
+
+    `created_at` and `updated_at` use `auto_now_add` / `auto_now`, so Django
+    already refuses to accept them as form input. Listing them in
+    `readonly_fields` is what makes them show up on the change form at all.
+    """
+
+    readonly_fields = ("created_at", "updated_at")
+
+
 class RatingInline(admin.TabularInline):
     """Edit a movie's ratings from the movie change form."""
 
@@ -14,7 +25,7 @@ class RatingInline(admin.TabularInline):
 
 
 @admin.register(Movie)
-class MovieAdmin(admin.ModelAdmin):
+class MovieAdmin(AuditedModelAdmin):
     list_display = ("title", "release_year", "director", "created_at")
     list_filter = ("genres", "release_year")
     search_fields = ("title", "description")
@@ -33,7 +44,7 @@ class MovieAdmin(admin.ModelAdmin):
 
 
 @admin.register(Genre)
-class GenreAdmin(admin.ModelAdmin):
+class GenreAdmin(AuditedModelAdmin):
     list_display = ("name", "description", "created_at")
     search_fields = ("name", "description")
     search_help_text = "Type a genre name or any word from its description."
@@ -42,7 +53,7 @@ class GenreAdmin(admin.ModelAdmin):
 
 
 @admin.register(Person)
-class PersonAdmin(admin.ModelAdmin):
+class PersonAdmin(AuditedModelAdmin):
     list_display = ("name", "birth_date", "created_at")
     search_fields = ("name", "biography")
     search_help_text = "Type a person name or any word from the biography."
@@ -51,7 +62,7 @@ class PersonAdmin(admin.ModelAdmin):
 
 
 @admin.register(Rating)
-class RatingAdmin(admin.ModelAdmin):
+class RatingAdmin(AuditedModelAdmin):
     list_display = ("movie", "score", "comment", "created_at")
     list_filter = ("score",)
     # A bare `movie` is not a valid lookup here: Django would build
