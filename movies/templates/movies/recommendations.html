@@ -1,0 +1,90 @@
+{% comment %}
+Public recommendations page. No authentication is required or referenced.
+{% endcomment %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Movie recommendations</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      margin: 0 auto; max-width: 60rem; padding: 2rem 1.25rem 4rem; line-height: 1.5;
+    }
+    h1 { margin-bottom: .25rem; }
+    .lead { color: #6b7280; margin-top: 0; }
+    h2 { border-bottom: 1px solid #d1d5db; padding-bottom: .35rem; margin-top: 2.5rem; }
+    ol.movies { list-style: none; margin: 0; padding: 0; }
+    ol.movies li {
+      display: flex; gap: 1rem; align-items: flex-start;
+      padding: .9rem 0; border-bottom: 1px solid #e5e7eb;
+    }
+    .poster { width: 64px; height: 96px; object-fit: cover; border-radius: 4px; flex: none; }
+    .no-poster {
+      width: 64px; height: 96px; flex: none; border-radius: 4px;
+      background: #e5e7eb; display: flex; align-items: center; justify-content: center;
+      color: #9ca3af; font-size: .7rem;
+    }
+    .title { font-weight: 600; }
+    .meta { color: #6b7280; font-size: .875rem; }
+    .score { font-weight: 600; white-space: nowrap; }
+    .unrated { color: #9ca3af; font-style: italic; font-weight: 400; }
+    .tags { margin-top: .25rem; display: flex; flex-wrap: wrap; gap: .35rem; }
+    .tag { background: #f3f4f6; border-radius: 999px; padding: .1rem .6rem; font-size: .75rem; }
+    .empty {
+      background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 6px;
+      padding: 2rem; text-align: center; color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <h1>Movie recommendations</h1>
+  <p class="lead">
+    {% block count %}{{ movie_count }} movie{{ movie_count|pluralize }} grouped by genre,
+    best rated first.{% endblock %}
+  </p>
+
+  {% if not recommendations %}
+    <div class="empty">
+      <p><strong>No movies to recommend yet.</strong></p>
+      <p>Once movies and their genres are added they will show up here.</p>
+    </div>
+  {% else %}
+    {% for group in recommendations %}
+      <section>
+        <h2>{{ group.genre.name }}</h2>
+        {% if group.genre.description %}<p class="meta">{{ group.genre.description }}</p>{% endif %}
+        <ol class="movies">
+          {% for movie in group.movies %}
+            <li>
+              {% if movie.poster %}
+                <img class="poster" src="{{ movie.poster.url }}" alt="Poster for {{ movie.title }}">
+              {% else %}
+                <div class="no-poster">No poster</div>
+              {% endif %}
+              <div>
+                <div class="title">{{ movie.title }} <span class="meta">({{ movie.release_year }})</span></div>
+                <div class="meta">
+                  Directed by {{ movie.director.name }} &middot; {{ movie.duration }} min
+                </div>
+                {% if movie.average_score %}
+                  <div class="score">
+                    {{ movie.average_score|floatformat:1 }} / 10
+                    <span class="meta">({{ movie.ratings_count }} rating{{ movie.ratings_count|pluralize }})</span>
+                  </div>
+                {% else %}
+                  <div class="score unrated">Not rated yet</div>
+                {% endif %}
+                <div class="tags">
+                  {% for genre in movie.genres.all %}<span class="tag">{{ genre.name }}</span>{% endfor %}
+                </div>
+              </div>
+            </li>
+          {% endfor %}
+        </ol>
+      </section>
+    {% endfor %}
+  {% endif %}
+</body>
+</html>
