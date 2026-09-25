@@ -1,90 +1,107 @@
-{% comment %}
-Public recommendations page. No authentication is required or referenced.
-{% endcomment %}<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Movie recommendations</title>
-  <style>
-    :root { color-scheme: light dark; }
-    body {
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-      margin: 0 auto; max-width: 60rem; padding: 2rem 1.25rem 4rem; line-height: 1.5;
-    }
-    h1 { margin-bottom: .25rem; }
-    .lead { color: #6b7280; margin-top: 0; }
-    h2 { border-bottom: 1px solid #d1d5db; padding-bottom: .35rem; margin-top: 2.5rem; }
-    ol.movies { list-style: none; margin: 0; padding: 0; }
-    ol.movies li {
-      display: flex; gap: 1rem; align-items: flex-start;
-      padding: .9rem 0; border-bottom: 1px solid #e5e7eb;
-    }
-    .poster { width: 64px; height: 96px; object-fit: cover; border-radius: 4px; flex: none; }
-    .no-poster {
-      width: 64px; height: 96px; flex: none; border-radius: 4px;
-      background: #e5e7eb; display: flex; align-items: center; justify-content: center;
-      color: #9ca3af; font-size: .7rem;
-    }
-    .title { font-weight: 600; }
-    .meta { color: #6b7280; font-size: .875rem; }
-    .score { font-weight: 600; white-space: nowrap; }
-    .unrated { color: #9ca3af; font-style: italic; font-weight: 400; }
-    .tags { margin-top: .25rem; display: flex; flex-wrap: wrap; gap: .35rem; }
-    .tag { background: #f3f4f6; border-radius: 999px; padding: .1rem .6rem; font-size: .75rem; }
-    .empty {
-      background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 6px;
-      padding: 2rem; text-align: center; color: #6b7280;
-    }
-  </style>
-</head>
-<body>
-  <h1>Movie recommendations</h1>
-  <p class="lead">
-    {% block count %}{{ movie_count }} movie{{ movie_count|pluralize }} grouped by genre,
-    best rated first.{% endblock %}
+{% extends "movies/base.html" %}
+
+{% block title %}Movie recommendations{% endblock %}
+
+{% block description %}
+Top-rated movies grouped by genre, based on the ratings recorded for each title.
+{% endblock %}
+
+{% block heading %}Movie recommendations{% endblock %}
+
+{% block subtitle %}
+Top-rated titles, grouped by the genres they share. Rankings use the average
+score of every rating recorded for a movie.
+{% endblock %}
+
+{% block content %}
+  <p class="page-lead">
+    <span><strong>{{ movie_count }}</strong> movie{{ movie_count|pluralize }} in the catalogue</span>
+    <span aria-hidden="true">&middot;</span>
+    <span><strong>{{ recommendations|length }}</strong> genre{{ recommendations|length|pluralize }} represented</span>
   </p>
 
   {% if not recommendations %}
-    <div class="empty">
-      <p><strong>No movies to recommend yet.</strong></p>
-      <p>Once movies and their genres are added they will show up here.</p>
+    <div class="empty-state">
+      <span class="empty-state__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2.5" y="4" width="19" height="16" rx="2.5"></rect>
+          <path d="M7.5 4v16M16.5 4v16M2.5 12h19M2.5 8h5M2.5 16h5M16.5 8h5M16.5 16h5"></path>
+        </svg>
+      </span>
+      <h2 class="empty-state__title">No movies to recommend yet</h2>
+      <p class="empty-state__text">
+        The catalogue is empty. Once movies are recorded together with their genres
+        and ratings, the best rated titles will be listed here automatically.
+      </p>
     </div>
   {% else %}
     {% for group in recommendations %}
-      <section>
-        <h2>{{ group.genre.name }}</h2>
-        {% if group.genre.description %}<p class="meta">{{ group.genre.description }}</p>{% endif %}
-        <ol class="movies">
+      <section class="genre-section" aria-labelledby="genre-{{ group.genre.pk }}">
+        <header class="genre-section__header">
+          <h2 class="genre-section__title" id="genre-{{ group.genre.pk }}">
+            {{ group.genre.name }}
+          </h2>
+          {% if group.genre.description %}
+            <p class="genre-section__description">{{ group.genre.description }}</p>
+          {% endif %}
+        </header>
+
+        <ol class="grid">
           {% for movie in group.movies %}
             <li>
-              {% if movie.poster %}
-                <img class="poster" src="{{ movie.poster.url }}" alt="Poster for {{ movie.title }}">
-              {% else %}
-                <div class="no-poster">No poster</div>
-              {% endif %}
-              <div>
-                <div class="title">{{ movie.title }} <span class="meta">({{ movie.release_year }})</span></div>
-                <div class="meta">
-                  Directed by {{ movie.director.name }} &middot; {{ movie.duration }} min
+              <article class="card">
+                <div class="card__media">
+                  {% if movie.poster %}
+                    <img src="{{ movie.poster.url }}" alt="Poster for {{ movie.title }}"
+                         loading="lazy" decoding="async">
+                  {% else %}
+                    <span class="card__placeholder">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3" y="4.5" width="18" height="15" rx="2"></rect>
+                        <path d="M3 15l4.5-4.5 4 4 3-3L21 17"></path>
+                        <circle cx="15.5" cy="9" r="1.4"></circle>
+                      </svg>
+                      No poster
+                    </span>
+                  {% endif %}
                 </div>
-                {% if movie.average_score %}
-                  <div class="score">
-                    {{ movie.average_score|floatformat:1 }} / 10
-                    <span class="meta">({{ movie.ratings_count }} rating{{ movie.ratings_count|pluralize }})</span>
+
+                <div class="card__body">
+                  <h3 class="card__title">{{ movie.title }}</h3>
+                  <p class="card__meta">
+                    <span>{{ movie.release_year }}</span>
+                    <span aria-hidden="true">&middot;</span>
+                    <span>{{ movie.duration }} min</span>
+                  </p>
+                  <p class="card__director">
+                    <span class="label">Directed by</span> {{ movie.director.name }}
+                  </p>
+                  <div class="card__tags">
+                    {% for genre in movie.genres.all %}
+                      <span class="chip">{{ genre.name }}</span>
+                    {% endfor %}
                   </div>
-                {% else %}
-                  <div class="score unrated">Not rated yet</div>
-                {% endif %}
-                <div class="tags">
-                  {% for genre in movie.genres.all %}<span class="tag">{{ genre.name }}</span>{% endfor %}
                 </div>
-              </div>
+
+                <div class="card__footer">
+                  {% if movie.average_score %}
+                    <span class="badge">
+                      {{ movie.average_score|floatformat:1 }}<span aria-hidden="true">/10</span>
+                      <span class="badge__count">
+                        {{ movie.ratings_count }} rating{{ movie.ratings_count|pluralize }}
+                      </span>
+                    </span>
+                  {% else %}
+                    <span class="badge badge--muted">Not rated yet</span>
+                  {% endif %}
+                </div>
+              </article>
             </li>
           {% endfor %}
         </ol>
       </section>
     {% endfor %}
   {% endif %}
-</body>
-</html>
+{% endblock %}

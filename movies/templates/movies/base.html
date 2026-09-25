@@ -1,0 +1,29 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Movie catalogue{% endblock %}</title>
+  <meta name="description" content="{% block description %}Public movie catalogue and recommendations.{% endblock %}">
+  <link rel="stylesheet" href="{% static 'css/movies.css' %}">
+</head>
+<body>
+  <a class="visually-hidden" href="#main">Skip to content</a>
+
+  <header class="masthead">
+    <div class="container">
+      <p class="masthead__eyebrow">Public catalogue</p>
+      <h1 class="masthead__title">{% block heading %}Movie recommendations{% endblock %}</h1>
+      <p class="masthead__subtitle">
+        {% block subtitle %}Top-rated titles, grouped by the genres they share.{% endblock %}
+      </p>
+    </div>
+  </header>
+
+  <main class="page" id="main">
+    <div class="container">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</body>
+</html>
