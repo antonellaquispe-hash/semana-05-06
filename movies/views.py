@@ -1,9 +1,11 @@
 from collections import defaultdict
 
-from django.db.models import Avg, Count, F
-from django.shortcuts import render
+from django.db.models import Avg, Count, F, Q
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
 
-from .models import Movie
+from .models import Movie, Genre, Rating
+from .forms import MovieSearchForm, RatingSubmitForm
 
 # How many movies are recommended per genre.
 RECOMMENDATIONS_PER_GENRE = 5
@@ -16,20 +18,27 @@ def recommended_movies(request):
     rating (highest first). Movies without any rating are kept but ranked last,
     so an unrated title never hides a rated one.
     """
-    movies = list(
-        Movie.objects.annotate(
-            average_score=Avg("ratings__score"),
-            ratings_count=Count("ratings"),
-        )
-        # The template renders the director for every movie, and `genres` is
-        # walked for every movie too, so fetch both up front.
-        .select_related("director")
-        .prefetch_related("genres")
-        .order_by(F("average_score").desc(nulls_last=True), "title")
-    )
+    query = Movie.objects.annotate(
+        average_score=Avg("ratings__score"),
+        ratings_count=Count("ratings"),
+    ).select_related("director").prefetch_related("genres")
 
-    # Build the genre -> movies mapping in a single pass, so the page costs a
-    # fixed number of queries instead of one per genre.
+    search_form = MovieSearchForm(request.GET)
+    if search_form.is_valid():
+        q = search_form.cleaned_data.get("query")
+        genre = search_form.cleaned_data.get("genre")
+        min_score = search_form.cleaned_data.get("min_score")
+        if q:
+            query = query.filter(
+                Q(title__icontains=q) | Q(description__icontains=q)
+            )
+        if genre is not None:
+            query = query.filter(genres=genre)
+        if min_score is not None:
+            query = query.filter(ratings__score__gte=min_score).distinct()
+
+    movies = list(query.order_by(F("average_score").desc(nulls_last=True), "title"))
+
     movies_by_genre = defaultdict(list)
     for movie in movies:
         for genre in movie.genres.all():
@@ -49,5 +58,39 @@ def recommended_movies(request):
         {
             "recommendations": recommendations,
             "movie_count": len(movies),
+            "search_form": search_form,
+        },
+    )
+
+
+def movie_detail(request, pk):
+    """Detail page for a single movie with its ratings and a rating form."""
+    movie = get_object_or_404(
+        Movie.objects.select_related("director")
+        .prefetch_related("genres", "ratings"),
+        pk=pk,
+    )
+    movie.average_score = movie.ratings.aggregate(
+        avg=Avg("score")
+    )["avg"]
+
+    if request.method == "POST":
+        form = RatingSubmitForm(request.POST)
+        if form.is_valid():
+            rating = form.save(commit=False)
+            rating.movie = movie
+            rating.save()
+            messages.success(request, "¡Tu valoración se ha registrado!")
+            return redirect("movies:movie_detail", pk=movie.pk)
+    else:
+        form = RatingSubmitForm()
+
+    return render(
+        request,
+        "movies/movie_detail.html",
+        {
+            "movie": movie,
+            "rating_form": form,
+            "average_score": movie.average_score,
         },
     )

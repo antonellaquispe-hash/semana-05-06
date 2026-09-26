@@ -10,6 +10,16 @@
 <body>
   <a class="visually-hidden btn btn--primary" href="#main">Ir al contenido</a>
 
+  <nav class="navbar">
+    <div class="container">
+      <a href="{% url 'movies:recommendations' %}" class="navbar__brand">🎬 Películas</a>
+      <div class="navbar__links">
+        <a href="{% url 'movies:recommendations' %}" class="btn btn--primary">Catálogo</a>
+        <a href="{% url 'admin:index' %}" class="btn btn--gradient">Admin</a>
+      </div>
+    </div>
+  </nav>
+
   <header class="masthead">
     <div class="container">
       <p class="masthead__eyebrow">Catálogo público</p>
@@ -22,6 +32,13 @@
 
   <main class="page" id="main">
     <div class="container">
+      {% if messages %}
+        {% for message in messages %}
+          <div class="empty-state" style="margin-bottom: var(--space-lg);">
+            <p>{{ message }}</p>
+          </div>
+        {% endfor %}
+      {% endif %}
       {% block content %}{% endblock %}
     </div>
   </main>

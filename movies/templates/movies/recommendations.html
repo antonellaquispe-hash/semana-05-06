@@ -25,11 +25,28 @@ película.
     {% endblocktranslate %}
     <span aria-hidden="true">&middot;</span>
     {% blocktranslate count counter=recommendations|length %}
-      <strong>{{ counter }}</strong> representado
+      <strong>{{ counter }}</strong> género representado
     {% plural %}
-      <strong>{{ counter }}</strong> representados
+      <strong>{{ counter }}</strong> géneros representados
     {% endblocktranslate %}
   </p>
+
+  <form method="get" class="search-bar">
+    <div class="form-group">
+      {{ search_form.query.label_tag }}
+      {{ search_form.query }}
+    </div>
+    <div class="form-group">
+      {{ search_form.genre.label_tag }}
+      {{ search_form.genre }}
+    </div>
+    <div class="form-group">
+      {{ search_form.min_score.label_tag }}
+      {{ search_form.min_score }}
+    </div>
+    <button type="submit" class="btn btn--gradient">Filtrar</button>
+    <a href="{% url 'movies:recommendations' %}" class="btn btn--primary">Limpiar</a>
+  </form>
 
   {% if not recommendations %}
     <div class="empty-state">
@@ -48,7 +65,7 @@ película.
     </div>
   {% else %}
     {% for group in recommendations %}
-      <section class="genre-section" aria-labelledby="genre-{{ group.genre.pk }}">
+      <section class="genre-section" data-genre="{{ group.genre.name }}" aria-labelledby="genre-{{ group.genre.pk }}">
         <header class="genre-section__header">
           <h2 class="genre-section__title" id="genre-{{ group.genre.pk }}">
             {{ group.genre.name }}
@@ -60,60 +77,79 @@ película.
 
         <ol class="grid">
           {% for movie in group.movies %}
+            {% with movie.genres.first.name as primary_genre %}
             <li>
-              <article class="card">
-                <div class="card__media">
-                  {% if movie.poster %}
-                    <img src="{{ movie.poster.url }}" alt="Cartel de {{ movie.title }}"
-                         loading="lazy" decoding="async">
-                  {% else %}
-                    <span class="card__placeholder">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <rect x="3" y="4.5" width="18" height="15" rx="2"></rect>
-                        <path d="M3 15l4.5-4.5 4 4 3-3L21 17"></path>
-                        <circle cx="15.5" cy="9" r="1.4"></circle>
-                      </svg>
-                      Sin cartel
-                    </span>
-                  {% endif %}
-                </div>
-
-                <div class="card__body">
-                  <h3 class="card__title">{{ movie.title }}</h3>
-                  <p class="card__meta">
-                    <span>{{ movie.release_year }}</span>
-                    <span aria-hidden="true">&middot;</span>
-                    <span>{{ movie.duration }} min</span>
-                  </p>
-                  <p class="card__director">
-                    <span class="label">Dirigida por</span> {{ movie.director.name }}
-                  </p>
-                  <div class="card__tags">
-                    {% for genre in movie.genres.all %}
-                      <span class="chip">{{ genre.name }}</span>
-                    {% endfor %}
-                  </div>
-                </div>
-
-                <div class="card__footer">
-                  {% if movie.average_score %}
-                    <span class="badge">
-                      {{ movie.average_score|floatformat:1 }}<span aria-hidden="true">/10</span>
-                      <span class="badge__count">
-                        {% blocktranslate count counter=movie.ratings_count %}
-                          {{ counter }} valoración
-                        {% plural %}
-                          {{ counter }} valoraciones
-                        {% endblocktranslate %}
+              <a href="{% url 'movies:movie_detail' pk=movie.pk %}" class="card-link">
+                <article class="card card--{{ primary_genre|lower }}">
+                  <div class="card__media">
+                    {% if movie.average_score and movie.average_score >= 9 %}
+                      <span class="card__top-badge">Top</span>
+                    {% endif %}
+                    {% if movie.poster %}
+                      <img src="{{ movie.poster.url }}" alt="Cartel de {{ movie.title }}"
+                           loading="lazy" decoding="async">
+                    {% else %}
+                      <span class="card__placeholder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <rect x="3" y="4.5" width="18" height="15" rx="2"></rect>
+                          <path d="M3 15l4.5-4.5 4 4 3-3L21 17"></path>
+                          <circle cx="15.5" cy="9" r="1.4"></circle>
+                        </svg>
+                        Sin cartel
                       </span>
-                    </span>
-                  {% else %}
-                    <span class="badge badge--muted">Sin valorar</span>
-                  {% endif %}
-                </div>
-              </article>
+                    {% endif %}
+                  </div>
+
+                  <div class="card__body">
+                    <h3 class="card__title">{{ movie.title }}</h3>
+                    <p class="card__meta">
+                      <span>{{ movie.release_year }}</span>
+                      <span aria-hidden="true">&middot;</span>
+                      <span>{{ movie.duration }} min</span>
+                    </p>
+                    <p class="card__director">
+                      <span class="label">Dirigida por</span> {{ movie.director.name }}
+                    </p>
+                    <div class="card__tags">
+                      {% for genre in movie.genres.all %}
+                        <span class="chip chip--{{ genre.name|lower }}">{{ genre.name }}</span>
+                      {% endfor %}
+                    </div>
+                  </div>
+
+                  <div class="card__footer">
+                    {% if movie.average_score %}
+                      <span class="badge
+                        {% if movie.average_score >= 8 %}badge--high
+                        {% elif movie.average_score >= 5 %}badge--mid
+                        {% else %}badge--low{% endif %}">
+                        {{ movie.average_score|floatformat:1 }}<span aria-hidden="true">/10</span>
+                        <span class="badge__count">
+                          {% blocktranslate count counter=movie.ratings_count %}
+                            {{ counter }} valoración
+                          {% plural %}
+                            {{ counter }} valoraciones
+                          {% endblocktranslate %}
+                        </span>
+                      </span>
+                      <div class="score-bar">
+                        <div class="score-bar__track">
+                          <div class="score-bar__fill
+                            {% if movie.average_score >= 8 %}score-bar__fill--high
+                            {% elif movie.average_score >= 5 %}score-bar__fill--mid
+                            {% else %}score-bar__fill--low{% endif %}"
+                             style="width: calc({{ movie.average_score|default_if_none:0 }} * 10%)"></div>
+                        </div>
+                      </div>
+                    {% else %}
+                      <span class="badge badge--muted">Sin valorar</span>
+                    {% endif %}
+                  </div>
+                </article>
+              </a>
             </li>
+            {% endwith %}
           {% endfor %}
         </ol>
       </section>
