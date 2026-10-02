@@ -16,46 +16,48 @@ Detalle de {{ movie.title }}, dirigida por {{ movie.director.name }} ({{ movie.r
 {% block content %}
   <a href="{% url 'movies:recommendations' %}" class="btn btn--gradient">&larr; Volver al catálogo</a>
 
-  <div style="margin-top: var(--space-xl);">
-    {% comment %}
-    La misma tarjeta que se usa en los listados. Aquí el título baja a <h2>
-    porque ya no cuelga de un encabezado de sección, y no se envuelve en un
-    enlace porque la propia página es el destino.
-    {% endcomment %}
-    {% include "movies/_movie_card.html" with movie=movie heading_level="2" %}
+  <div class="movie-detail">
+    <div style="margin-top: var(--space-xl);">
+      {% comment %}
+      La misma tarjeta que se usa en los listados. Aquí el título baja a <h2>
+      porque ya no cuelga de un encabezado de sección, y no se envuelve en un
+      enlace porque la propia página es el destino.
+      {% endcomment %}
+      {% include "movies/_movie_card.html" with movie=movie heading_level="2" %}
+    </div>
+
+    <section style="margin-top: var(--space-xl);">
+      <h3>Valorar esta película</h3>
+      <form method="post" class="rating-form">
+        {% csrf_token %}
+        {{ rating_form.as_p }}
+        <button type="submit" class="btn btn--gradient">Enviar valoración</button>
+      </form>
+      {% if messages %}
+        {% for message in messages %}
+          <div class="empty-state" style="margin-top: var(--space-md);">
+            <p>{{ message }}</p>
+          </div>
+        {% endfor %}
+      {% endif %}
+    </section>
+
+    {% with movie.ratings.all as ratings_list %}
+      {% if ratings_list %}
+        <section style="margin-top: var(--space-xl);">
+          <h3>Valoraciones</h3>
+          <ol style="display: flex; flex-direction: column; gap: var(--space-sm);">
+            {% for r in ratings_list %}
+              <li class="rating-list-item">
+                <strong>{{ r.score }}/10</strong>
+                {% if r.comment %}
+                  <p>{{ r.comment }}</p>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ol>
+        </section>
+      {% endif %}
+    {% endwith %}
   </div>
-
-  <section style="margin-top: var(--space-xl);">
-    <h3 style="margin-bottom: var(--space-sm);">Valorar esta película</h3>
-    <form method="post" class="rating-form">
-      {% csrf_token %}
-      {{ rating_form.as_p }}
-      <button type="submit" class="btn btn--gradient">Enviar valoración</button>
-    </form>
-    {% if messages %}
-      {% for message in messages %}
-        <div class="empty-state" style="margin-top: var(--space-md);">
-          <p>{{ message }}</p>
-        </div>
-      {% endfor %}
-    {% endif %}
-  </section>
-
-  {% with movie.ratings.all as ratings_list %}
-    {% if ratings_list %}
-      <section style="margin-top: var(--space-xl);">
-        <h3 style="margin-bottom: var(--space-sm);">Valoraciones</h3>
-        <ol style="display: flex; flex-direction: column; gap: var(--space-sm);">
-          {% for r in ratings_list %}
-            <li style="padding: var(--space-sm); background: var(--surface-sunken); border-radius: var(--radius-md);">
-              <strong>{{ r.score }}/10</strong>
-              {% if r.comment %}
-                <p style="margin: var(--space-2xs) 0 0;">{{ r.comment }}</p>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ol>
-      </section>
-    {% endif %}
-  {% endwith %}
 {% endblock %}

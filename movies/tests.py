@@ -439,3 +439,192 @@ class MovieRelationsTests(MovieTestData):
 
         with self.assertRaises(ProtectedError):
             self.director.delete()
+
+
+class EmptyCatalogRenderingTests(MovieTestData):
+    """El catálogo vacío se muestra mediante la rama `{% empty %}`."""
+
+    def test_el_mensaje_de_catalogo_vacio_se_renderiza(self):
+        Movie.objects.all().delete()
+
+        response = self.client.get(reverse("movies:recommendations"))
+
+        self.assertContains(response, "Todavía no hay películas para recomendar")
+        self.assertContains(response, "El catálogo está vacío")
+
+    def test_con_contenido_no_aparece_el_mensaje_de_catalogo_vacio(self):
+        response = self.client.get(reverse("movies:recommendations"))
+
+        self.assertNotContains(response, "Todavía no hay películas para recomendar")
+
+    def test_sin_contenido_no_se_renderiza_ninguna_tarjeta(self):
+        Movie.objects.all().delete()
+
+        response = self.client.get(reverse("movies:recommendations"))
+
+        self.assertNotContains(response, "genre-section")
+        self.assertNotContains(response, "card__title")
+
+    def test_una_pelicula_sin_generos_tampoco_dispara_el_mensaje(self):
+        Movie.objects.all().delete()
+        Movie.objects.create(
+            title="Sin Géneros",
+            release_year=2000,
+            duration=90,
+            director=self.director,
+        )
+
+        response = self.client.get(reverse("movies:recommendations"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Todavía no hay películas para recomendar")
+
+
+class ScoreBarCssTests(MovieTestData):
+    """La barra de puntuación entrega a CSS un número con punto decimal.
+
+    El proyecto usa `LANGUAGE_CODE = "es"`, así que un valor sin filtrar se
+    renderiza como `8,0`. Ese formato es correcto para el texto de la
+    insignia, pero inválido dentro de un `calc()`, donde CSS exige siempre
+    el punto como separador decimal.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # Dos valoraciones cuyo promedio es exactamente 8.0.
+        Rating.objects.create(movie=self.movie, score=9, comment="Primera.")
+        Rating.objects.create(movie=self.movie, score=7)
+
+    def test_la_portada_usa_punto_decimal_en_el_calc(self):
+        response = self.client.get(reverse("movies:recommendations"))
+
+        self.assertContains(response, "calc(8.0 * 10%)")
+
+    def test_la_ficha_usa_punto_decimal_en_el_calc(self):
+        response = self.client.get(
+            reverse("movies:movie_detail", args=[self.movie.pk])
+        )
+
+        self.assertContains(response, "calc(8.0 * 10%)")
+
+    def test_ningun_calc_contiene_una_coma(self):
+        for url in (
+            reverse("movies:recommendations"),
+            reverse("movies:movie_detail", args=[self.movie.pk]),
+        ):
+            with self.subTest(url=url):
+                html = self.client.get(url).content.decode()
+                self.assertNotRegex(html, r"calc\([^)]*,")
+
+    def test_la_insignia_conserva_el_formato_de_texto_en_espanol(self):
+        response = self.client.get(
+            reverse("movies:movie_detail", args=[self.movie.pk])
+        )
+
+        self.assertContains(response, "8,0")
+
+    def test_el_ancho_cambia_segun_la_puntuacion(self):
+        Movie.objects.all().delete()
+        pelicula = Movie.objects.create(
+            title="Media",
+            release_year=2000,
+            duration=90,
+            director=self.director,
+        )
+        pelicula.genres.add(self.accion)
+        Rating.objects.create(movie=pelicula, score=5)
+
+        response = self.client.get(reverse("movies:recommendations"))
+
+        self.assertContains(response, "calc(5.0 * 10%)")
+
+
+class MovieCardFragmentTests(MovieTestData):
+    """Las tarjetas se renderizan con el fragmento compartido."""
+
+    def setUp(self):
+        super().setUp()
+        # La película de ejemplo pertenece a dos géneros y aparecería dos
+        # veces; se deja en uno solo para poder contar las tarjetas sin ruido.
+        self.movie.genres.clear()
+        self.movie.genres.add(self.accion)
+
+    def test_la_portada_usa_el_fragmento_de_tarjeta(self):
+        response = self.client.get(reverse("movies:recommendations"))
+
+        self.assertTemplateUsed(response, "movies/_movie_card.html")
+
+    def test_la_ficha_usa_el_fragmento_de_tarjeta(self):
+        response = self.client.get(
+            reverse("movies:movie_detail", args=[self.movie.pk])
+        )
+
+        self.assertTemplateUsed(response, "movies/_movie_card.html")
+
+    def test_el_fragmento_se_renderiza_una_sola_vez_por_pelicula(self):
+        response = self.client.get(reverse("movies:recommendations"))
+        html = response.content.decode()
+
+        self.assertEqual(html.count('<article class="card'), 1)
+        self.assertEqual(html.count('class="card__footer"'), 1)
+
+    def test_el_titulo_es_un_h3_en_los_listados(self):
+        response = self.client.get(reverse("movies:recommendations"))
+
+        self.assertContains(response, '<h3 class="card__title">')
+
+    def test_el_titulo_es_un_h2_en_la_ficha(self):
+        response = self.client.get(
+            reverse("movies:movie_detail", args=[self.movie.pk])
+        )
+
+        self.assertContains(response, '<h2 class="card__title">')
+
+    def test_el_fragmento_conserva_las_clases_de_genero_por_slug(self):
+        response = self.client.get(reverse("movies:recommendations"))
+
+        self.assertContains(response, "card--accion")
+        self.assertContains(response, "chip--accion")
+
+    def test_una_pelicula_sin_genero_no_rompe_el_fragmento(self):
+        Movie.objects.all().delete()
+        Movie.objects.create(
+            title="Sin Géneros",
+            release_year=2000,
+            duration=90,
+            director=self.director,
+        )
+
+        response = self.client.get(
+            reverse("movies:movie_detail", args=[Movie.objects.get().pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sin cartel")
+
+
+class DetailPageStylesTests(MovieTestData):
+    """La ficha usa las clases que el CSS ya definía para ella."""
+
+    def test_la_ficha_usa_el_contenedor_movie_detail(self):
+        response = self.client.get(
+            reverse("movies:movie_detail", args=[self.movie.pk])
+        )
+
+        self.assertContains(response, 'class="movie-detail"')
+
+    def test_las_valoraciones_usan_la_clase_de_la_lista(self):
+        Rating.objects.create(movie=self.movie, score=8, comment="Muy buena.")
+
+        response = self.client.get(
+            reverse("movies:movie_detail", args=[self.movie.pk])
+        )
+
+        self.assertContains(response, 'class="rating-list-item"')
+
+    def test_sin_valoraciones_no_se_muestra_el_bloque(self):
+        response = self.client.get(
+            reverse("movies:movie_detail", args=[self.movie.pk])
+        )
+
+        self.assertNotContains(response, "rating-list-item")

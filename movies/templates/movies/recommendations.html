@@ -48,7 +48,28 @@ película.
     <a href="{% url 'movies:recommendations' %}" class="btn btn--primary">Limpiar</a>
   </form>
 
-  {% if not recommendations %}
+  {% for group in recommendations %}
+    <section class="genre-section" data-genre="{{ group.genre.name }}" aria-labelledby="genre-{{ group.genre.pk }}">
+      <header class="genre-section__header">
+        <h2 class="genre-section__title" id="genre-{{ group.genre.pk }}">
+          {{ group.genre.name }}
+        </h2>
+        {% if group.genre.description %}
+          <p class="genre-section__description">{{ group.genre.description }}</p>
+        {% endif %}
+      </header>
+
+      <ol class="grid">
+        {% for movie in group.movies %}
+          <li>
+            <a href="{% url 'movies:movie_detail' pk=movie.pk %}" class="card-link">
+              {% include "movies/_movie_card.html" with movie=movie %}
+            </a>
+          </li>
+        {% endfor %}
+      </ol>
+    </section>
+  {% empty %}
     <div class="empty-state">
       <span class="empty-state__icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
@@ -63,28 +84,5 @@ película.
         valoraciones, las mejor valoradas aparecerán aquí automáticamente.
       </p>
     </div>
-  {% else %}
-    {% for group in recommendations %}
-      <section class="genre-section" data-genre="{{ group.genre.name }}" aria-labelledby="genre-{{ group.genre.pk }}">
-        <header class="genre-section__header">
-          <h2 class="genre-section__title" id="genre-{{ group.genre.pk }}">
-            {{ group.genre.name }}
-          </h2>
-          {% if group.genre.description %}
-            <p class="genre-section__description">{{ group.genre.description }}</p>
-          {% endif %}
-        </header>
-
-        <ol class="grid">
-          {% for movie in group.movies %}
-            <li>
-              <a href="{% url 'movies:movie_detail' pk=movie.pk %}" class="card-link">
-                {% include "movies/_movie_card.html" with movie=movie %}
-              </a>
-            </li>
-          {% endfor %}
-        </ol>
-      </section>
-    {% endfor %}
-  {% endif %}
+  {% endfor %}
 {% endblock %}

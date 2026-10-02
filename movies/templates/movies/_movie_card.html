@@ -1,4 +1,5 @@
 {% load i18n %}
+{% load l10n %}
 {% comment %}
 Tarjeta reutilizable de una película.
 
@@ -21,6 +22,14 @@ Contexto:
 Una carga de ``{% include %}`` no hereda los ``{% load %}`` de la
 plantilla que la incluye, así que esta plantilla carga i18n por su
 cuenta para poder usar ``{% blocktranslate %}``.
+
+También carga l10n: el ancho de la barra se escribe dentro de un
+``calc()`` de CSS, y CSS exige siempre el punto decimal. Con
+``LANGUAGE_CODE = "es"`` un ``{{ movie.average_score }}`` a secas se
+renderiza como ``8,0`` y produciría ``calc(8,0 * 10%)``, que el
+navegador descarta por no ser válido. El filtro ``unlocalize`` deja el
+separador en su forma invariante para el resto del mundo y sí lo
+entiende ``calc()``.
 {% endcomment %}
 {% firstof heading_level "3" as title_tag %}
 <article class="card card--{{ movie.genres.first.name|slugify }}">
@@ -82,7 +91,7 @@ cuenta para poder usar ``{% blocktranslate %}``.
             {% if movie.average_score >= 8 %}score-bar__fill--high
             {% elif movie.average_score >= 5 %}score-bar__fill--mid
             {% else %}score-bar__fill--low{% endif %}"
-               style="width: calc({{ movie.average_score|default_if_none:0 }} * 10%)"></div>
+               style="width: calc({{ movie.average_score|default_if_none:0|unlocalize }} * 10%)"></div>
         </div>
       </div>
     {% else %}
