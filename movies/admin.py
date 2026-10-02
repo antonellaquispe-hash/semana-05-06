@@ -22,6 +22,40 @@ class AuditedModelAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at")
 
 
+def con_peliculas_filter(relation, title):
+    """Construye un filtro sí/no según tenga registros relacionados o no.
+
+    `Genre` y `Person` no tienen ningún campo booleano o seleccionable que
+    sirva para filtrar, y Django sólo admite en `list_filter` un nombre de
+    campo, una tupla `(campo, SomeFieldListFilter)` o una subclase de
+    `ListFilter`. Este filtro cubre el caso "tiene o no tiene películas",
+    que es justo lo que hace falta para localizar los registros vacíos.
+    """
+
+    class FiltroPresencia(admin.SimpleListFilter):
+        # `title` y `parameter_name` los lee `ListFilter.__init__` antes de
+        # que se puedan asignar en `__init__`, así que tienen que ser
+        # atributos de clase.
+        title = None
+        parameter_name = None
+
+        def lookups(self, request, model_admin):
+            return (("yes", "Sí"), ("no", "No"))
+
+        def queryset(self, request, queryset):
+            if self.value() is None:
+                return queryset
+            # `distinct` es necesario: el filtro atraviesa la relación, y
+            # sin él un género con tres películas aparecería tres veces.
+            return queryset.filter(
+                **{f"{relation}__isnull": self.value() == "no"}
+            ).distinct()
+
+    FiltroPresencia.title = title
+    FiltroPresencia.parameter_name = relation
+    return FiltroPresencia
+
+
 class RatingInline(admin.TabularInline):
     """Edit a movie's ratings from the movie change form."""
 
@@ -90,6 +124,10 @@ class GenreAdmin(AuditedModelAdmin):
         return obj.movies.count()
     movie_count.short_description = "# películas"
 
+    # Marca los géneros vacíos, que son los que muestran el estado vacío en
+    # /movies/genre/<id>/.
+    list_filter = (con_peliculas_filter("movies", "Con películas"),)
+
 
 @admin.register(Person)
 class PersonAdmin(AuditedModelAdmin):
@@ -111,6 +149,11 @@ class PersonAdmin(AuditedModelAdmin):
     def movie_count(self, obj):
         return obj.directed_movies.count()
     movie_count.short_description = "# películas dirigidas"
+
+    # Distingue a quienes han dirigido alguna película de los que no.
+    list_filter = (
+        con_peliculas_filter("directed_movies", "Con películas dirigidas"),
+    )
 
 
 @admin.register(Rating)
