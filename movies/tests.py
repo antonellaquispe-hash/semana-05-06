@@ -11,11 +11,12 @@ renderizado y efectos en la base de datos) y no detalles internos.
 """
 
 from datetime import date
+import re
 
 from django.contrib.messages import get_messages
 from django.template.loader import get_template
 from django.test import TestCase
-from django.urls import reverse
+from django.urls import resolve, reverse
 
 from .models import Genre, Movie, Person, Rating
 
@@ -316,6 +317,8 @@ class TemplateRenderingTests(MovieTestData):
             "movies/base.html",
             "movies/recommendations.html",
             "movies/movie_detail.html",
+            "movies/_movie_card.html",
+            "movies/genre_detail.html",
         ):
             with self.subTest(plantilla=nombre):
                 self.assertIsNotNone(get_template(nombre))
@@ -628,3 +631,322 @@ class DetailPageStylesTests(MovieTestData):
         )
 
         self.assertNotContains(response, "rating-list-item")
+
+
+class GenreListingPageTests(MovieTestData):
+    """El listado de películas por género reutiliza la tarjeta del catálogo.
+
+    Es el requisito de "entidad listada que reutiliza el mismo fragmento
+    que el catálogo": la página de género no debe duplicar el HTML de la
+    tarjeta, sino incluir `movies/_movie_card.html` igual que lo hace
+    `recommendations.html`.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.vacio = Genre.objects.create(
+            name="Musical",
+            description="Películas con música protagonista.",
+        )
+
+    def url(self, genre=None):
+        genre = self.accion if genre is None else genre
+        return reverse("movies:genre_detail", kwargs={"genre_pk": genre.pk})
+
+    def test_un_genero_existente_responde_correctamente(self):
+        response = self.client.get(self.url())
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_la_url_nombrada_apunta_a_la_ruta_del_genero(self):
+        self.assertEqual(self.url(), f"/movies/genre/{self.accion.pk}/")
+
+    def test_el_nombre_del_genero_aparece(self):
+        response = self.client.get(self.url())
+
+        self.assertContains(response, self.accion.name)
+
+    def test_la_descripcion_del_genero_aparece_cuando_existe(self):
+        response = self.client.get(self.url())
+
+        self.assertContains(response, self.accion.description)
+
+    def test_sin_descripcion_la_pagina_sigue_funcionando(self):
+        response = self.client.get(self.url(self.drama))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.drama.name)
+        self.assertNotContains(response, self.accion.description)
+
+    def test_las_peliculas_del_genero_aparecen(self):
+        response = self.client.get(self.url())
+
+        self.assertContains(response, self.movie.title)
+
+    def test_no_se_listan_peliculas_de_otros_generos(self):
+        otra = Movie.objects.create(
+            title="Corto de Drama",
+            description="No pertenece a Acción.",
+            release_year=2001,
+            duration=15,
+            director=self.director,
+        )
+        otra.genres.add(self.drama)
+
+        response = self.client.get(self.url())
+
+        self.assertNotContains(response, "Corto de Drama")
+
+    def test_las_estadisticas_de_valoracion_estan_disponibles(self):
+        Rating.objects.create(movie=self.movie, score=8, comment="Muy buena.")
+        Rating.objects.create(movie=self.movie, score=10, comment="Impresionante.")
+
+        response = self.client.get(self.url())
+        pelicula = response.context["movies"][0]
+
+        self.assertAlmostEqual(float(pelicula.average_score), 9.0, places=2)
+        self.assertEqual(pelicula.ratings_count, 2)
+        self.assertContains(response, "9.0")
+
+    def test_el_contexto_expone_el_genero_y_su_numero_de_peliculas(self):
+        response = self.client.get(self.url())
+
+        self.assertEqual(response.context["genre"], self.accion)
+        self.assertEqual(response.context["genre"].movie_count, 1)
+
+    def test_una_pelicula_sin_valorar_aparece_sin_promedio(self):
+        response = self.client.get(self.url())
+
+        self.assertIsNone(response.context["movies"][0].average_score)
+        self.assertContains(response, "Sin valorar")
+
+    def test_un_genero_sin_peliculas_muestra_el_estado_vacio(self):
+        response = self.client.get(self.url(self.vacio))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context["movies"]), [])
+        self.assertContains(response, "empty-state")
+        self.assertContains(response, "Todavía no hay películas")
+
+    def test_un_genero_inexistente_devuelve_404(self):
+        inexistente = self.accion.pk + 9999
+
+        response = self.client.get(
+            reverse("movies:genre_detail", kwargs={"genre_pk": inexistente})
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_un_identificador_no_numerico_devuelve_404(self):
+        response = self.client.get("/movies/genre/abc/")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_la_plantilla_hereda_de_base(self):
+        """Si no extendiera `base.html`, faltarían la navegación y el CSS."""
+        response = self.client.get(self.url())
+
+        self.assertTemplateUsed(response, "movies/base.html")
+        self.assertContains(response, "<nav", html=False)
+        self.assertContains(response, "css/movies.css")
+        self.assertContains(response, reverse("admin:index"))
+
+    def test_la_plantilla_usa_el_fragmento_de_tarjeta(self):
+        response = self.client.get(self.url())
+
+        self.assertTemplateUsed(response, "movies/genre_detail.html")
+        self.assertTemplateUsed(response, "movies/_movie_card.html")
+        self.assertTemplateUsed(response, "movies/base.html")
+
+    def test_el_html_de_la_tarjeta_no_esta_duplicado(self):
+        """El listado se construye incluyendo el fragmento, no copiándolo.
+
+        Si el marcado de una tarjeta del catálogo y del listado de género es
+        idéntico carácter a carácter, es porque sale del mismo fragmento: una
+        copia pegada en `genre_detail.html` divergiría en cuanto cambiase
+        `_movie_card.html`.
+        """
+        Rating.objects.create(movie=self.movie, score=8, comment="Muy buena.")
+
+        catalogo = self.client.get(reverse("movies:recommendations"))
+        listado = self.client.get(self.url())
+        tarjeta_catalogo = self._tarjeta(catalogo.content.decode())
+        tarjeta_listado = self._tarjeta(listado.content.decode())
+
+        self.assertEqual(tarjeta_catalogo, tarjeta_listado)
+        # Y el catálogo sigue siendo el que usa el fragmento, no una copia.
+        self.assertTemplateUsed(catalogo, "movies/_movie_card.html")
+        self.assertTemplateUsed(listado, "movies/_movie_card.html")
+
+    @staticmethod
+    def _tarjeta(html):
+        """Devuelve el marcado de la primera tarjeta de una página."""
+        inicio = html.index('<article class="card')
+        fin = html.index("</article>", inicio) + len("</article>")
+        return html[inicio:fin]
+
+    def test_el_listado_ordena_igual_que_las_recomendaciones(self):
+        peor = Movie.objects.create(
+            title="Peor valorada",
+            description="Del mismo género.",
+            release_year=1999,
+            duration=100,
+            director=self.director,
+        )
+        peor.genres.add(self.accion)
+        sin_valorar = Movie.objects.create(
+            title="Sin valorar",
+            description="Del mismo género.",
+            release_year=2000,
+            duration=90,
+            director=self.director,
+        )
+        sin_valorar.genres.add(self.accion)
+        Rating.objects.create(movie=peor, score=3)
+        Rating.objects.create(movie=self.movie, score=9)
+
+        response = self.client.get(self.url())
+        titulos = [pelicula.title for pelicula in response.context["movies"]]
+
+        # Mejor puntuación primero y las sin valorar al final.
+        self.assertEqual(
+            titulos,
+            [self.movie.title, peor.title, sin_valorar.title],
+        )
+
+    def test_el_listado_no_hace_una_consulta_por_pelicula(self):
+        """Un género con muchas películas no debe disparar una consulta cada una."""
+        for indice in range(4):
+            pelicula = Movie.objects.create(
+                title=f"Peli {indice}",
+                description="Del mismo género.",
+                release_year=2000 + indice,
+                duration=90,
+                director=self.director,
+            )
+            pelicula.genres.add(self.accion)
+            Rating.objects.create(movie=pelicula, score=7)
+
+        primera = Movie.objects.create(
+            title="Con muchas valoraciones",
+            description="Del mismo género.",
+            release_year=2010,
+            duration=90,
+            director=self.director,
+        )
+        primera.genres.add(self.accion)
+        for indice in range(6):
+            Rating.objects.create(movie=primera, score=indice + 1)
+
+        with self.assertNumQueries(3):
+            self.client.get(self.url())
+
+    def test_los_chips_de_la_pelicula_enlazan_a_su_genero(self):
+        respuesta = self.client.get(
+            reverse("movies:movie_detail", args=[self.movie.pk])
+        )
+
+        self.assertContains(respuesta, f'href="{self.url()}"')
+
+
+class GenreNavigationTests(MovieTestData):
+    """Desde el catálogo se puede llegar al listado de cada género."""
+
+    def test_el_catalogo_enlaza_a_listados_de_genero(self):
+        respuesta = self.client.get(reverse("movies:recommendations"))
+
+        esperado = reverse(
+            "movies:genre_detail", kwargs={"genre_pk": self.accion.pk}
+        )
+
+        self.assertContains(respuesta, f'href="{esperado}"')
+
+    def test_cada_seccion_del_catalogo_enlaza_a_su_genero(self):
+        respuesta = self.client.get(reverse("movies:recommendations"))
+
+        self.assertContains(
+            respuesta, f'<a href="{self._url(self.accion)}">{self.accion.name}</a>'
+        )
+        self.assertContains(
+            respuesta, f'<a href="{self._url(self.drama)}">{self.drama.name}</a>'
+        )
+
+    def _url(self, genre):
+        return reverse("movies:genre_detail", kwargs={"genre_pk": genre.pk})
+
+    @staticmethod
+    def _anidamiento(html):
+        """Cuántos `<a>` se abren a la vez. Más de 1 es HTML inválido."""
+        nivel = maximo = 0
+        for etiqueta in re.finditer(r"<(/?)a\b", html):
+            nivel += -1 if etiqueta.group(1) else 1
+            maximo = max(maximo, nivel)
+        return maximo
+
+    def test_el_nombre_del_genero_sigue_pestaneando_como_encabezado(self):
+        respuesta = self.client.get(reverse("movies:recommendations"))
+
+        self.assertContains(
+            respuesta, f'<h2 class="genre-section__title" id="genre-{self.accion.pk}">'
+        )
+
+    def test_los_chips_del_catalogo_no_se_anidan_dentro_del_enlace_de_tarjeta(self):
+        """En el catálogo la tarjeta ya es un <a>, así que sus chips no pueden serlo.
+
+        Un `<a>` dentro de otro `<a>` es HTML inválido y el navegador cierra
+        el enlace externo antes de llegar a los chips, dejando media tarjeta
+        sin clic.
+        """
+        respuesta = self.client.get(reverse("movies:recommendations"))
+        html = respuesta.content.decode()
+
+        inicio = html.index('class="card-link"')
+        fin = html.index("</a>", inicio)
+
+        self.assertNotIn('<a class="chip', html[inicio:fin])
+
+    def test_ninguna_pagina_anida_etiquetas_a(self):
+        """Ninguna de las tres páginas debe abrir un <a> dentro de otro <a>."""
+        paginas = {
+            "catalogo": reverse("movies:recommendations"),
+            "genero": self._url(self.accion),
+            "ficha": reverse("movies:movie_detail", args=[self.movie.pk]),
+        }
+
+        for nombre, url in paginas.items():
+            with self.subTest(pagina=nombre):
+                html = self.client.get(url).content.decode()
+                self.assertEqual(self._anidamiento(html), 1)
+
+    def test_la_ruta_del_detalle_no_roba_las_urls_de_pelicula(self):
+        """El prefijo `genre/` evita que `<int:pk>/` y `<int:genre_pk>/` colisionen.
+
+        Sin él, `/movies/1/` encajaría en las dos rutas y Django mandaría
+        la ficha de película a la vista de género (o al revés).
+        """
+        pelicula = resolve(reverse("movies:movie_detail", args=[self.movie.pk]))
+        genero = resolve(
+            reverse("movies:genre_detail", kwargs={"genre_pk": self.accion.pk})
+        )
+
+        self.assertEqual(pelicula.view_name, "movies:movie_detail")
+        self.assertEqual(pelicula.func.__name__, "movie_detail")
+        self.assertEqual(genero.view_name, "movies:genre_detail")
+        self.assertEqual(genero.func.__name__, "genre_detail")
+
+    def test_ambos_identificadores_pueden_coincidir_sin_ambiguedad(self):
+        """Comprueba el caso peor: el id de la película y el del género iguales.
+
+        Es justo lo que pasaría con una ruta `<int:genre_pk>/` sin prefijo:
+        ambas URLs serían `/movies/1/` y sólo una podría funcionar.
+        """
+        self.assertEqual(self.movie.pk, self.accion.pk)
+
+        ficha = self.client.get(
+            reverse("movies:movie_detail", args=[self.accion.pk])
+        )
+        listado = self.client.get(self._url(self.accion))
+
+        self.assertEqual(ficha.context["movie"], self.movie)
+        self.assertEqual(listado.context["genre"], self.accion)

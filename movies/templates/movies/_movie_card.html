@@ -18,6 +18,16 @@ Contexto:
   * ``heading_level`` -- nivel del encabezado del título. Por defecto "3",
                           porque en los listados la película cuelga de un
                           ``<h2>`` de sección y en su ficha pasa a ser "2".
+  * ``link_genres``   -- si es verdadero, cada chip de género es un enlace a
+                          ``movies:genre_detail``. Sólo lo activa
+                          ``movie_detail.html``, la única plantilla donde la
+                          tarjeta no está ya dentro de su propio ``<a
+                          class="card-link">``. En los dos listados los chips
+                          se quedan como ``<span>``: anidar un segundo
+                          ``<a>`` es HTML inválido y el navegador cerraría el
+                          enlace externo antes de los chips, dejando la
+                          tarjeta a medio clic. La navegación a un género se
+                          resuelve entonces por el título de la sección.
 
 Una carga de ``{% include %}`` no hereda los ``{% load %}`` de la
 plantilla que la incluye, así que esta plantilla carga i18n por su
@@ -65,7 +75,12 @@ entiende ``calc()``.
     </p>
     <div class="card__tags">
       {% for genre in movie.genres.all %}
-        <span class="chip chip--{{ genre.name|slugify }}">{{ genre.name }}</span>
+        {% if link_genres %}
+          <a class="chip chip--{{ genre.name|slugify }}"
+             href="{% url 'movies:genre_detail' genre.pk %}">{{ genre.name }}</a>
+        {% else %}
+          <span class="chip chip--{{ genre.name|slugify }}">{{ genre.name }}</span>
+        {% endif %}
       {% endfor %}
     </div>
   </div>

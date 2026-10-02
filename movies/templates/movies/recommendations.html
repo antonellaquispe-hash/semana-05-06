@@ -52,7 +52,12 @@ película.
     <section class="genre-section" data-genre="{{ group.genre.name }}" aria-labelledby="genre-{{ group.genre.pk }}">
       <header class="genre-section__header">
         <h2 class="genre-section__title" id="genre-{{ group.genre.pk }}">
-          {{ group.genre.name }}
+          {% comment %}
+          Los chips de la tarjeta no pueden enlazar aquí porque la tarjeta
+          ya es un ``<a>``; el nombre de la sección sí es un sitio válido
+          para entrar al listado completo del género.
+          {% endcomment %}
+          <a href="{% url 'movies:genre_detail' genre_pk=group.genre.pk %}">{{ group.genre.name }}</a>
         </h2>
         {% if group.genre.description %}
           <p class="genre-section__description">{{ group.genre.description }}</p>

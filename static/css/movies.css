@@ -324,6 +324,14 @@ img {
   background: linear-gradient(180deg, var(--accent), var(--accent-border));
 }
 
+/* El nombre del género es un enlace a su listado. Hereda color y grosor
+   del encabezado para no parecer un enlace de texto; sólo el hover global
+   lo delata. */
+.genre-section__title a {
+  color: inherit;
+  text-decoration: none;
+}
+
 .genre-section__description {
   max-width: 68ch;
   color: var(--text-muted);
@@ -465,6 +473,9 @@ img {
   border: 1px solid var(--accent-border);
   border-radius: var(--radius-pill);
   white-space: nowrap;
+  /* Un chip puede ser un <a> hacia el listado de su género. El subrayado
+     por defecto del navegador rompería el aspecto de la píldora. */
+  text-decoration: none;
   transition: background var(--duration) var(--ease),
     border-color var(--duration) var(--ease);
 }

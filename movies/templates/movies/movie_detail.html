@@ -21,9 +21,10 @@ Detalle de {{ movie.title }}, dirigida por {{ movie.director.name }} ({{ movie.r
       {% comment %}
       La misma tarjeta que se usa en los listados. Aquí el título baja a <h2>
       porque ya no cuelga de un encabezado de sección, y no se envuelve en un
-      enlace porque la propia página es el destino.
+      enlace porque la propia página es el destino. Como no hay un ``<a>``
+      alrededor, los chips sí pueden enlazar a su género.
       {% endcomment %}
-      {% include "movies/_movie_card.html" with movie=movie heading_level="2" %}
+      {% include "movies/_movie_card.html" with movie=movie heading_level="2" link_genres=True %}
     </div>
 
     <section style="margin-top: var(--space-xl);">

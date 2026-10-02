@@ -106,3 +106,38 @@ def movie_detail(request, pk):
             "average_score": movie.average_score,
         },
     )
+
+
+def genre_detail(request, genre_pk):
+    """Public page listing every movie that belongs to a single genre.
+
+    The movies reuse the same card fragment as the recommendations page,
+    including the rating statistics, so both listings stay visually and
+    behaviourally identical. Ordering matches the recommendations page as
+    well: best rated first, unrated titles last.
+    """
+    genre = get_object_or_404(
+        Genre.objects.annotate(
+            movie_count=Count("movies", distinct=True),
+        ),
+        pk=genre_pk,
+    )
+
+    # `select_related` covers the director the card prints and
+    # `prefetch_related` covers the genres it renders, so the whole listing
+    # costs one query for the movies plus one for the genres, regardless of
+    # how many movies the genre has.
+    movies = list(
+        with_rating_stats(
+            genre.movies.select_related("director").prefetch_related("genres")
+        ).order_by(F("average_score").desc(nulls_last=True), "title")
+    )
+
+    return render(
+        request,
+        "movies/genre_detail.html",
+        {
+            "genre": genre,
+            "movies": movies,
+        },
+    )
