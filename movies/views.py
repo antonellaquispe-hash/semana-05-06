@@ -11,6 +11,21 @@ from .forms import MovieSearchForm, RatingSubmitForm
 RECOMMENDATIONS_PER_GENRE = 5
 
 
+def with_rating_stats(queryset):
+    """Annotate a movie queryset with the values the card template needs.
+
+    `average_score` and `ratings_count` are what `templates/movies/
+    _movie_card.html` reads to render the rating badge and the score bar.
+    Computing them in a single pair of aggregates keeps that fragment
+    usable from any view without one of them having to assign the values
+    by hand, and without an extra query per movie.
+    """
+    return queryset.annotate(
+        average_score=Avg("ratings__score"),
+        ratings_count=Count("ratings"),
+    )
+
+
 def recommended_movies(request):
     """Public page listing the best rated movies within each genre.
 
@@ -18,10 +33,9 @@ def recommended_movies(request):
     rating (highest first). Movies without any rating are kept but ranked last,
     so an unrated title never hides a rated one.
     """
-    query = Movie.objects.annotate(
-        average_score=Avg("ratings__score"),
-        ratings_count=Count("ratings"),
-    ).select_related("director").prefetch_related("genres")
+    query = with_rating_stats(Movie.objects).select_related("director").prefetch_related(
+        "genres"
+    )
 
     search_form = MovieSearchForm(request.GET)
     if search_form.is_valid():
@@ -66,13 +80,11 @@ def recommended_movies(request):
 def movie_detail(request, pk):
     """Detail page for a single movie with its ratings and a rating form."""
     movie = get_object_or_404(
-        Movie.objects.select_related("director")
-        .prefetch_related("genres", "ratings"),
+        with_rating_stats(Movie.objects).select_related("director").prefetch_related(
+            "genres", "ratings"
+        ),
         pk=pk,
     )
-    movie.average_score = movie.ratings.aggregate(
-        avg=Avg("score")
-    )["avg"]
 
     if request.method == "POST":
         form = RatingSubmitForm(request.POST)

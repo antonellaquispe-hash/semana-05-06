@@ -16,86 +16,14 @@ Detalle de {{ movie.title }}, dirigida por {{ movie.director.name }} ({{ movie.r
 {% block content %}
   <a href="{% url 'movies:recommendations' %}" class="btn btn--gradient">&larr; Volver al catálogo</a>
 
-  <article class="card card--{{ movie.genres.first.name|lower }}" style="margin-top: var(--space-xl);">
-    <div class="card__media">
-      {% if movie.poster %}
-        <img src="{{ movie.poster.url }}" alt="Cartel de {{ movie.title }}" loading="lazy" decoding="async">
-      {% else %}
-        <span class="card__placeholder">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="4.5" width="18" height="15" rx="2"></rect>
-            <path d="M3 15l4.5-4.5 4 4 3-3L21 17"></path>
-            <circle cx="15.5" cy="9" r="1.4"></circle>
-          </svg>
-          Sin cartel
-        </span>
-      {% endif %}
-      {% if movie.average_score and movie.average_score >= 9 %}
-        <span class="card__top-badge">Top</span>
-      {% endif %}
-    </div>
-
-    <div class="card__body">
-      <h2 class="card__title">{{ movie.title }}</h2>
-      <p class="card__meta">
-        <span>{{ movie.release_year }}</span>
-        <span aria-hidden="true">&middot;</span>
-        <span>{{ movie.duration }} min</span>
-      </p>
-      <p class="card__director">
-        <span class="label">Dirigida por</span> {{ movie.director.name }}
-      </p>
-      <div class="card__tags">
-        {% for genre in movie.genres.all %}
-          <span class="chip chip--{{ genre.name|lower }}">{{ genre.name }}</span>
-        {% endfor %}
-      </div>
-    </div>
-
-    {% if movie.average_score %}
-      {% if movie.average_score >= 8 %}
-        <span class="badge badge--high">
-          {{ movie.average_score|floatformat:1 }}<span aria-hidden="true">/10</span>
-          <span class="badge__count">
-            {{ movie.ratings.count }} valoración{% if movie.ratings.count != 1 %}es{% endif %}
-          </span>
-        </span>
-        <div class="score-bar">
-          <div class="score-bar__track">
-            <div class="score-bar__fill score-bar__fill--high"
-                 style="width: calc({{ movie.average_score }} * 10%)"></div>
-          </div>
-        </div>
-      {% elif movie.average_score >= 5 %}
-        <span class="badge badge--mid">
-          {{ movie.average_score|floatformat:1 }}<span aria-hidden="true">/10</span>
-          <span class="badge__count">
-            {{ movie.ratings.count }} valoración{% if movie.ratings.count != 1 %}es{% endif %}
-          </span>
-        </span>
-        <div class="score-bar">
-          <div class="score-bar__track">
-            <div class="score-bar__fill score-bar__fill--mid"
-                 style="width: calc({{ movie.average_score }} * 10%)"></div>
-          </div>
-        </div>
-      {% else %}
-        <span class="badge badge--low">
-          {{ movie.average_score|floatformat:1 }}<span aria-hidden="true">/10</span>
-          <span class="badge__count">
-            {{ movie.ratings.count }} valoración{% if movie.ratings.count != 1 %}es{% endif %}
-          </span>
-        </span>
-        <div class="score-bar">
-          <div class="score-bar__track">
-            <div class="score-bar__fill score-bar__fill--low"
-                 style="width: calc({{ movie.average_score }} * 10%)"></div>
-          </div>
-        </div>
-      {% endif %}
-    {% endif %}
-  </article>
+  <div style="margin-top: var(--space-xl);">
+    {% comment %}
+    La misma tarjeta que se usa en los listados. Aquí el título baja a <h2>
+    porque ya no cuelga de un encabezado de sección, y no se envuelve en un
+    enlace porque la propia página es el destino.
+    {% endcomment %}
+    {% include "movies/_movie_card.html" with movie=movie heading_level="2" %}
+  </div>
 
   <section style="margin-top: var(--space-xl);">
     <h3 style="margin-bottom: var(--space-sm);">Valorar esta película</h3>

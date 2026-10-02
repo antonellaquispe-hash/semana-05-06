@@ -1,0 +1,92 @@
+{% load i18n %}
+{% comment %}
+Tarjeta reutilizable de una película.
+
+Se incluye desde distintas plantillas, siempre como único hijo de un
+contenedor de tarjetas (normalmente un ``<a class="card-link">`` cuando
+la tarjeta debe enlazar al detalle, o directamente en la página de
+detalle, donde no hace falta enlace porque ya se está en ella).
+
+Espera que la película tenga disponibles ``average_score`` y
+``ratings_count``. Ambas anotaciones las añaden las vistas de
+``movies.views`` con ``with_rating_stats``, de modo que la tarjeta no
+necesita disparar consultas adicionales.
+
+Contexto:
+  * ``movie``         -- la película a mostrar. Obligatorio.
+  * ``heading_level`` -- nivel del encabezado del título. Por defecto "3",
+                          porque en los listados la película cuelga de un
+                          ``<h2>`` de sección y en su ficha pasa a ser "2".
+
+Una carga de ``{% include %}`` no hereda los ``{% load %}`` de la
+plantilla que la incluye, así que esta plantilla carga i18n por su
+cuenta para poder usar ``{% blocktranslate %}``.
+{% endcomment %}
+{% firstof heading_level "3" as title_tag %}
+<article class="card card--{{ movie.genres.first.name|slugify }}">
+  <div class="card__media">
+    {% if movie.average_score and movie.average_score >= 9 %}
+      <span class="card__top-badge">Top</span>
+    {% endif %}
+    {% if movie.poster %}
+      <img src="{{ movie.poster.url }}" alt="Cartel de {{ movie.title }}"
+           loading="lazy" decoding="async">
+    {% else %}
+      <span class="card__placeholder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4.5" width="18" height="15" rx="2"></rect>
+          <path d="M3 15l4.5-4.5 4 4 3-3L21 17"></path>
+          <circle cx="15.5" cy="9" r="1.4"></circle>
+        </svg>
+        Sin cartel
+      </span>
+    {% endif %}
+  </div>
+
+  <div class="card__body">
+    <h{{ title_tag }} class="card__title">{{ movie.title }}</h{{ title_tag }}>
+    <p class="card__meta">
+      <span>{{ movie.release_year }}</span>
+      <span aria-hidden="true">&middot;</span>
+      <span>{{ movie.duration }} min</span>
+    </p>
+    <p class="card__director">
+      <span class="label">Dirigida por</span> {{ movie.director.name }}
+    </p>
+    <div class="card__tags">
+      {% for genre in movie.genres.all %}
+        <span class="chip chip--{{ genre.name|slugify }}">{{ genre.name }}</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card__footer">
+    {% if movie.average_score %}
+      <span class="badge
+        {% if movie.average_score >= 8 %}badge--high
+        {% elif movie.average_score >= 5 %}badge--mid
+        {% else %}badge--low{% endif %}">
+        {{ movie.average_score|floatformat:1 }}<span aria-hidden="true">/10</span>
+        <span class="badge__count">
+          {% blocktranslate count counter=movie.ratings_count %}
+            {{ counter }} valoración
+          {% plural %}
+            {{ counter }} valoraciones
+          {% endblocktranslate %}
+        </span>
+      </span>
+      <div class="score-bar">
+        <div class="score-bar__track">
+          <div class="score-bar__fill
+            {% if movie.average_score >= 8 %}score-bar__fill--high
+            {% elif movie.average_score >= 5 %}score-bar__fill--mid
+            {% else %}score-bar__fill--low{% endif %}"
+               style="width: calc({{ movie.average_score|default_if_none:0 }} * 10%)"></div>
+        </div>
+      </div>
+    {% else %}
+      <span class="badge badge--muted">Sin valorar</span>
+    {% endif %}
+  </div>
+</article>
