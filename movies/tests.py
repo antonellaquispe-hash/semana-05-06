@@ -11,6 +11,8 @@ renderizado y efectos en la base de datos) y no detalles internos.
 """
 
 from datetime import date
+from html.parser import HTMLParser
+from pathlib import Path
 import re
 
 from django.contrib.messages import get_messages
@@ -20,8 +22,76 @@ from django.urls import resolve, reverse
 
 from .models import Genre, Movie, Person, Rating
 
+# Carpeta donde Django busca las plantillas de esta aplicación.
+CARPETA_PLANTILLAS = Path(__file__).resolve().parent / "templates" / "movies"
+
 # Contenido HTML usado para comprobar el escapado automático de Django.
 HTML_SNIPPET = "<script>alert('xss')</script>"
+
+# Cierra la comilla del atributo en el que acaba escrito para intentar
+# colarse en él. Sin escapado, data-genre="{{ genre.name }}" se rompería y
+# el manejador onmouseover del final sería ejecutable.
+HTML_SNIPPET_ATRIBUTO = '"><img src=x onmouseover="alert(1)">'
+
+# Ampersand seguido de algo que parece una entidad: el escapado debe
+# convertirlo en "&amp;amp;" y no dejarlo pasar como "&amp;".
+HTML_SNIPPET_ENTIDAD = "Ciencia &amp; ficción"
+
+
+def plantillas_del_proyecto():
+    """Nombres de todas las plantillas HTML de la aplicación."""
+    return sorted(ruta.name for ruta in CARPETA_PLANTILLAS.glob("*.html"))
+
+
+class _HtmlInspector(HTMLParser):
+    """Lee el HTML realmente renderizado por Django.
+
+    Permite comprobar el escapado por sus consecuencias y no por sus
+    literales: si un `<script>` fuera ejecutable o un manejador `on...`
+    hubiera conseguido colarse en una etiqueta, aparecería en `etiquetas`
+    o en `atributos`. Con `convert_charrefs=True` el texto recogido llega
+    ya con las entidades resueltas, es decir, como lo vería el visitante.
+    """
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.etiquetas = []
+        self.con_atributos = []
+        self.texto = []
+
+    def handle_starttag(self, tag, attrs):
+        self.etiquetas.append(tag)
+        self.con_atributos.append((tag, attrs))
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+
+    def handle_data(self, data):
+        self.texto.append(data)
+
+    def atributos(self):
+        """Los atributos del documento como ternas (etiqueta, nombre, valor)."""
+        return [
+            (tag, nombre, valor)
+            for tag, attrs in self.con_atributos
+            for nombre, valor in attrs
+        ]
+
+    def nombres_de_atributo_que_empiezan_por(self, prefijo):
+        return sorted(
+            {nombre for _, nombre, _ in self.atributos() if nombre.startswith(prefijo)}
+        )
+
+    def atributos_de(self, etiqueta):
+        """Los atributos de cada aparición de una etiqueta, como diccionarios."""
+        return [dict(attrs) for tag, attrs in self.con_atributos if tag == etiqueta]
+
+
+def inspeccionar(html):
+    inspector = _HtmlInspector()
+    inspector.feed(html)
+    inspector.close()
+    return inspector
 
 
 class MovieTestData(TestCase):
@@ -399,6 +469,225 @@ class EscapingTests(MovieTestData):
         self.assertContains(response, "&lt;script&gt;")
 
 
+class AutoescapadoDePlantillasTests(MovieTestData):
+    """Requisito del laboratorio: nada de la base de datos se vuelve HTML.
+
+    Se demuestra sobre los campos de texto libre que las plantillas ya
+    renderizan —`Rating.comment`, `Genre.description`, `Genre.name` y
+    `Movie.title`— porque son los únicos por los que un usuario puede
+    introducir marcado. No se añade ningún campo, vista ni filtro: la
+    demostración no necesita tocar el código de producción.
+
+    Cada prueba analiza el HTML publicado con un parser, así que falla si
+    aparece una etiqueta ejecutable o un atributo inyectado, y no sólo si
+    cambia una cadena literal.
+    """
+
+    def html_de_la_ficha(self):
+        return self.client.get(
+            reverse("movies:movie_detail", args=[self.movie.pk])
+        ).content.decode()
+
+    def html_del_listado_de_genero(self, genre):
+        return self.client.get(
+            reverse("movies:genre_detail", kwargs={"genre_pk": genre.pk})
+        ).content.decode()
+
+    def test_el_comentario_de_valoracion_no_crea_una_etiqueta_script(self):
+        Rating.objects.create(movie=self.movie, score=5, comment=HTML_SNIPPET)
+
+        html = self.html_de_la_ficha()
+
+        self.assertNotIn("script", inspeccionar(html).etiquetas)
+        self.assertNotIn("<script>", html)
+
+    def test_el_comentario_de_valoracion_conserva_el_texto_visible(self):
+        Rating.objects.create(movie=self.movie, score=5, comment=HTML_SNIPPET)
+
+        html = self.html_de_la_ficha()
+
+        # El escapado no borra nada: el visitante sigue leyendo el texto.
+        self.assertIn(HTML_SNIPPET, "".join(inspeccionar(html).texto))
+
+    def test_el_comentario_de_valoracion_convierte_los_caracteres_en_entidades(self):
+        Rating.objects.create(movie=self.movie, score=5, comment=HTML_SNIPPET)
+
+        html = self.html_de_la_ficha()
+
+        self.assertIn("&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;", html)
+
+    def test_la_descripcion_del_genero_se_escapa_en_su_propio_listado(self):
+        genero = Genre.objects.create(name="Caché", description=HTML_SNIPPET)
+        Movie.objects.create(
+            title="Película Con Caché",
+            release_year=1999,
+            duration=95,
+            director=self.director,
+        ).genres.add(genero)
+
+        html = self.html_del_listado_de_genero(genero)
+        inspeccion = inspeccionar(html)
+
+        self.assertNotIn("script", inspeccion.etiquetas)
+        self.assertIn(HTML_SNIPPET, "".join(inspeccion.texto))
+
+    def test_la_descripcion_del_genero_se_escapa_tanto_en_texto_como_en_el_meta(self):
+        """El bloque `description` se renderiza dos veces y en contextos distintos."""
+        genero = Genre.objects.create(name="Caché", description=HTML_SNIPPET)
+        Movie.objects.create(
+            title="Película Con Caché",
+            release_year=1999,
+            duration=95,
+            director=self.director,
+        ).genres.add(genero)
+
+        inspeccion = inspeccionar(self.html_del_listado_de_genero(genero))
+        contenido_meta = next(
+            meta["content"]
+            for meta in inspeccion.atributos_de("meta")
+            if meta.get("name") == "description"
+        )
+
+        # Dentro del atributo el payload es un valor inerte, no una etiqueta.
+        self.assertIn(HTML_SNIPPET, contenido_meta)
+        self.assertNotIn("script", inspeccion.etiquetas)
+
+    def test_el_nombre_del_genero_se_escapa_en_el_chip(self):
+        genero = Genre.objects.create(name=f"Caché {HTML_SNIPPET}")
+        Movie.objects.create(
+            title="Del género peligroso",
+            release_year=1999,
+            duration=95,
+            director=self.director,
+        ).genres.add(genero)
+
+        html = self.html_del_listado_de_genero(genero)
+
+        self.assertNotIn("<script>", html)
+        self.assertIn("&lt;script&gt;", html)
+        self.assertIn(HTML_SNIPPET, "".join(inspeccionar(html).texto))
+
+    def test_una_comilla_en_el_nombre_del_genero_no_consigue_cerrar_un_atributo(self):
+        """`data-genre="{{ genre.name }}"` siempre está: buen contexto de atributo.
+
+        Movie.title sólo llega a un atributo cuando la película tiene cartel,
+        así que el género es el caso verificable sin montar una imagen.
+        """
+        genero = Genre.objects.create(name=HTML_SNIPPET_ATRIBUTO)
+        Movie.objects.create(
+            title="Del género peligroso",
+            release_year=1998,
+            duration=80,
+            director=self.director,
+        ).genres.add(genero)
+
+        html = self.html_del_listado_de_genero(genero)
+        inspeccion = inspeccionar(html)
+
+        # El payload sigue siendo un solo valor de atributo, no marcado.
+        self.assertEqual(
+            [HTML_SNIPPET_ATRIBUTO],
+            [
+                seccion["data-genre"]
+                for seccion in inspeccion.atributos_de("section")
+                if "data-genre" in seccion
+            ],
+        )
+        self.assertNotIn(HTML_SNIPPET_ATRIBUTO, html)
+
+    def test_el_payload_del_nombre_del_genero_no_crea_ni_una_etiqueta_ni_un_manejador(self):
+        genero = Genre.objects.create(name=HTML_SNIPPET_ATRIBUTO)
+        Movie.objects.create(
+            title="Del género peligroso",
+            release_year=1998,
+            duration=80,
+            director=self.director,
+        ).genres.add(genero)
+
+        html = self.html_del_listado_de_genero(genero)
+        inspeccion = inspeccionar(html)
+
+        self.assertNotIn("img", inspeccion.etiquetas)
+        self.assertEqual(
+            [],
+            inspeccion.nombres_de_atributo_que_empiezan_por("on"),
+            "La carga útil se coló en el marcado como manejador de evento",
+        )
+        self.assertIn(HTML_SNIPPET_ATRIBUTO, "".join(inspeccion.texto))
+
+    def test_una_entidad_previa_en_el_titulo_se_escapa_dos_veces(self):
+        Movie.objects.create(
+            title=HTML_SNIPPET_ENTIDAD,
+            release_year=2018,
+            duration=80,
+            director=self.director,
+        ).genres.add(self.drama)
+
+        html = self.client.get(reverse("movies:recommendations")).content.decode()
+
+        # "&amp;amp;" es lo que evita que el navegador lo lea como "&".
+        self.assertIn("Ciencia &amp;amp; ficción", html)
+        self.assertNotIn("Ciencia &amp; ficción", html)
+
+    def test_el_escapado_se_aplica_en_catalogo_listado_de_genero_y_ficha(self):
+        """La ficha, el catálogo y el listado de género respetan el autoescapado."""
+        Rating.objects.create(movie=self.movie, score=5, comment=HTML_SNIPPET)
+        Movie.objects.create(
+            title=HTML_SNIPPET_ATRIBUTO,
+            release_year=2018,
+            duration=80,
+            director=self.director,
+        ).genres.add(self.accion)
+        Genre.objects.filter(pk=self.accion.pk).update(description=HTML_SNIPPET)
+
+        paginas = {
+            "catalogo": reverse("movies:recommendations"),
+            "genero": reverse(
+                "movies:genre_detail", kwargs={"genre_pk": self.accion.pk}
+            ),
+            "ficha": reverse("movies:movie_detail", args=[self.movie.pk]),
+        }
+
+        for nombre, url in paginas.items():
+            with self.subTest(pagina=nombre):
+                inspeccion = inspeccionar(self.client.get(url).content.decode())
+
+                self.assertNotIn("script", inspeccion.etiquetas)
+                self.assertEqual(
+                    [],
+                    inspeccion.nombres_de_atributo_que_empiezan_por("on"),
+                )
+
+    def test_las_comprobaciones_estaticas_cubren_todas_las_plantillas(self):
+        """Si el listado se quedara vacío, los tests estáticos pasarían en falso."""
+        self.assertEqual(
+            [
+                "_movie_card.html",
+                "base.html",
+                "genre_detail.html",
+                "movie_detail.html",
+                "recommendations.html",
+            ],
+            plantillas_del_proyecto(),
+        )
+
+    def test_ninguna_plantilla_desactiva_el_autoescapado(self):
+        """Vigila para que nadie solucione un problema con `|safe`."""
+        for nombre in plantillas_del_proyecto():
+            with self.subTest(plantilla=nombre):
+                fuente = get_template(f"movies/{nombre}").template.source
+
+                for construccion in (
+                    "|safe",
+                    "|safeseq",
+                    "|safejs",
+                    "autoescape off",
+                    "{% autoescape",
+                    "mark_safe",
+                ):
+                    self.assertNotIn(construccion, fuente)
+
+
 class MovieRelationsTests(MovieTestData):
     """Las relaciones Movie-Genre y Movie-Person funcionan como espera el sitio."""
 
@@ -604,6 +893,76 @@ class MovieCardFragmentTests(MovieTestData):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Sin cartel")
+
+    def test_el_listado_de_genero_usa_el_fragmento_de_tarjeta(self):
+        response = self.client.get(
+            reverse("movies:genre_detail", kwargs={"genre_pk": self.accion.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "movies/_movie_card.html")
+
+    def test_el_fragmento_recibe_una_pelicula_distinta_en_cada_iteracion(self):
+        otra = Movie.objects.create(
+            title="Segunda Película",
+            release_year=2001,
+            duration=95,
+            director=self.director,
+        )
+        otra.genres.add(self.accion)
+
+        html = self.client.get(
+            reverse("movies:genre_detail", kwargs={"genre_pk": self.accion.pk})
+        ).content.decode()
+        tarjetas = html.split('<article class="card')[1:]
+
+        self.assertEqual(len(tarjetas), 2)
+        titulos = [
+            re.search(r'class="card__title">([^<]*)', tarjeta).group(1)
+            for tarjeta in tarjetas
+        ]
+        self.assertEqual(sorted(titulos), sorted([self.movie.title, otra.title]))
+
+    def test_la_tarjeta_muestra_titulo_generos_puntuacion_y_valoraciones(self):
+        Rating.objects.create(movie=self.movie, score=9, comment="Impresionante.")
+        Rating.objects.create(movie=self.movie, score=7)
+
+        html = self.client.get(
+            reverse("movies:genre_detail", kwargs={"genre_pk": self.accion.pk})
+        ).content.decode()
+        tarjeta = html.split('<article class="card')[1].split("</article>")[0]
+
+        self.assertIn(self.movie.title, tarjeta)
+        self.assertIn(self.accion.name, tarjeta)
+        self.assertIn("8.0", tarjeta)
+        self.assertIn("2 valoraciones", tarjeta)
+        self.assertIn("calc(8.0 * 10%)", tarjeta)
+
+    def test_el_fragmento_slugifica_generos_con_acentos_y_espacios(self):
+        ficcion = Genre.objects.create(name="Ciencia ficción")
+        Movie.objects.create(
+            title="Interestelar",
+            release_year=2014,
+            duration=169,
+            director=self.director,
+        ).genres.add(ficcion)
+
+        html = self.client.get(
+            reverse("movies:genre_detail", kwargs={"genre_pk": ficcion.pk})
+        ).content.decode()
+
+        # El slug es lo que la hoja de estilos espera; el nombre se ve entero.
+        self.assertIn("card--ciencia-ficcion", html)
+        self.assertIn("chip--ciencia-ficcion", html)
+        self.assertIn("Ciencia ficción", html)
+
+    def test_solo_el_fragmento_define_el_html_de_la_tarjeta(self):
+        """Ninguna plantilla debe copiar `<article class="card">` por su cuenta."""
+        for nombre in plantillas_del_proyecto():
+            with self.subTest(plantilla=nombre):
+                fuente = get_template(f"movies/{nombre}").template.source
+
+                self.assertEqual("<article" in fuente, nombre == "_movie_card.html")
 
 
 class DetailPageStylesTests(MovieTestData):
